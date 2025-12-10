@@ -7,7 +7,7 @@
  * In production on ESP32-S3:
  * - This is the only server process running
  * - All assets served locally (no CDN, no cloud)
- * - API endpoints return sensor data instead of mock values
+ * - API endpoints return real sensor data from MPU-6050
  */
 
 import { handleStatus } from "./routes/status";

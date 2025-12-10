@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  let streamActive = false;
+  export let isStreaming = false;
+
   let streamError: string | null = null;
   let imgRef: HTMLImageElement;
 
   function startStream() {
     if (imgRef) {
       imgRef.src = "/api/stream?" + Date.now();
-      streamActive = true;
+      isStreaming = true;
       streamError = null;
     }
   }
@@ -16,7 +17,7 @@
   function stopStream() {
     if (imgRef) {
       imgRef.src = "";
-      streamActive = false;
+      isStreaming = false;
     }
   }
 
@@ -28,7 +29,7 @@
       const url = URL.createObjectURL(blob);
       if (imgRef) {
         imgRef.src = url;
-        streamActive = false;
+        isStreaming = false;
       }
     } catch (e) {
       streamError = e instanceof Error ? e.message : "Capture failed";
@@ -44,7 +45,7 @@
   <div class="panel-header">
     <span class="panel-title">CAMERA</span>
     <div class="controls">
-      {#if streamActive}
+      {#if isStreaming}
         <button class="btn" on:click={stopStream}>STOP</button>
       {:else}
         <button class="btn" on:click={startStream}>STREAM</button>
@@ -62,9 +63,9 @@
         bind:this={imgRef}
         alt="Camera Feed"
         class="feed"
-        on:error={() => { streamError = "Stream unavailable"; streamActive = false; }}
+        on:error={() => { streamError = "Stream unavailable"; isStreaming = false; }}
       />
-      {#if !streamActive && !imgRef?.src}
+      {#if !isStreaming && !imgRef?.src}
         <div class="placeholder">NO SIGNAL</div>
       {/if}
     </div>

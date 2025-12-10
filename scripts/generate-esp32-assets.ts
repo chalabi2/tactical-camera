@@ -44,7 +44,7 @@ const char MAIN_JS[] PROGMEM = R"rawliteral(${mainJs})rawliteral";
 #endif
 `;
 
-  await Bun.write("./esp32/web_assets.h", header);
+  await Bun.write("./tactical_console/web_assets.h", header);
   
   console.log(`[esp32-assets] Generated esp32/web_assets.h`);
   console.log(`[esp32-assets]   index.html: ${indexHtml.length} bytes`);

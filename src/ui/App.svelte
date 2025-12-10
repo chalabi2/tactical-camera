@@ -1,7 +1,9 @@
 <script lang="ts">
   import StatusPanel from "./components/StatusPanel.svelte";
-  import TelemetryPanel from "./components/TelemetryPanel.svelte";
   import CameraFeed from "./components/CameraFeed.svelte";
+  import OrientationPanel from "./components/OrientationPanel.svelte";
+
+  let isStreaming = false;
 </script>
 
 <div class="console">
@@ -17,9 +19,9 @@
   </header>
 
   <main class="panels">
-    <StatusPanel />
-    <TelemetryPanel />
-    <CameraFeed />
+    <StatusPanel {isStreaming} />
+    <CameraFeed bind:isStreaming />
+    <OrientationPanel />
   </main>
 
   <footer class="footer">

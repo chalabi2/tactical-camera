@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  export let isStreaming = false;
+
   interface StatusData {
     deviceId: string;
     uptimeSeconds: number;
@@ -10,6 +12,8 @@
 
   let status: StatusData | null = null;
   let error: string | null = null;
+
+  $: recording = isStreaming || (status?.recording ?? false);
 
   function formatUptime(seconds: number): string {
     const hours = Math.floor(seconds / 3600);
@@ -65,8 +69,8 @@
 
         <div class="stat">
           <div class="stat-label">REC</div>
-          <div class="stat-value" class:rec-on={status.recording} class:rec-off={!status.recording}>
-            {status.recording ? "ON" : "OFF"}
+          <div class="stat-value" class:rec-on={recording} class:rec-off={!recording}>
+            {recording ? "ON" : "OFF"}
           </div>
         </div>
       </div>

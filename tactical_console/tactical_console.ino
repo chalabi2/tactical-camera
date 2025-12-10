@@ -8,15 +8,30 @@
  * - Board: XIAO ESP32S3 Sense (or your ESP32-S3 CAM variant)
  * - Partition: Huge APP (3MB No OTA)
  * - PSRAM: OPI PSRAM
+ * 
+ * Hardware connections:
+ * - MPU-6050: SDA->D4(GPIO5), SCL->D5(GPIO6), VCC->3.3V, GND->GND
  */
 
 #include "esp_camera.h"
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ESPmDNS.h>
+#include <Wire.h>
 #include "web_assets.h"  // Generated from frontend build
 
 #define CAMERA_MODEL_XIAO_ESP32S3
 #include "camera_pins.h"
+
+// MPU-6050 I2C address (ADO pin to GND = 0x68, to VCC = 0x69)
+#define MPU6050_ADDR 0x68
+#define MPU6050_PWR_MGMT_1 0x6B
+#define MPU6050_ACCEL_XOUT_H 0x3B
+#define MPU6050_GYRO_XOUT_H 0x43
+
+// I2C pins for MPU-6050 (separate from camera I2C)
+#define IMU_SDA_PIN 5   // D4
+#define IMU_SCL_PIN 6   // D5
 
 // WiFi credentials - change these for your network
 const char* ssid = "YOUR_SSID";
@@ -27,15 +42,21 @@ const bool AP_MODE = true;
 const char* ap_ssid = "TacticalConsole";
 const char* ap_password = "tactical123";
 
+// mDNS hostname - access via http://tactical.local
+const char* mdns_hostname = "tactical";
+
 WebServer server(80);
 
 // Device state
 unsigned long startTime;
 bool isRecording = false;
-float mockLat = 33.4484;
-float mockLon = -112.0740;
-float mockSpeed = 0;
-float mockHeading = 0;
+
+// IMU state (MPU-6050)
+bool imuAvailable = false;
+float accelX = 0, accelY = 0, accelZ = 0;  // Acceleration in g
+float gyroX = 0, gyroY = 0, gyroZ = 0;      // Angular velocity in deg/s
+float pitch = 0, roll = 0;                  // Calculated orientation angles
+float temperature = 0;                       // MPU-6050 internal temp sensor
 
 void setup() {
   Serial.begin(115200);
@@ -49,6 +70,13 @@ void setup() {
     Serial.println("[tactical-console] Camera init failed!");
   } else {
     Serial.println("[tactical-console] Camera ready");
+  }
+  
+  // Initialize MPU-6050 IMU
+  if (!initIMU()) {
+    Serial.println("[tactical-console] IMU init failed - continuing without IMU");
+  } else {
+    Serial.println("[tactical-console] IMU (MPU-6050) ready");
   }
   
   // Initialize WiFi
@@ -71,6 +99,16 @@ void setup() {
     Serial.println(WiFi.localIP());
   }
   
+  // Start mDNS responder for http://tactical.local
+  if (MDNS.begin(mdns_hostname)) {
+    MDNS.addService("http", "tcp", 80);
+    Serial.print("[tactical-console] mDNS: http://");
+    Serial.print(mdns_hostname);
+    Serial.println(".local");
+  } else {
+    Serial.println("[tactical-console] mDNS failed to start");
+  }
+  
   // Setup HTTP routes
   setupRoutes();
   server.begin();
@@ -80,8 +118,118 @@ void setup() {
 
 void loop() {
   server.handleClient();
-  updateMockTelemetry();
+  if (imuAvailable) {
+    readIMU();
+  }
   delay(10);
+}
+
+// MPU-6050 IMU initialization
+bool initIMU() {
+  Wire.begin(IMU_SDA_PIN, IMU_SCL_PIN);
+  Wire.setClock(400000);  // 400kHz I2C
+  
+  // Check if MPU-6050 is present
+  Wire.beginTransmission(MPU6050_ADDR);
+  if (Wire.endTransmission() != 0) {
+    imuAvailable = false;
+    return false;
+  }
+  
+  // Wake up MPU-6050 (clear sleep bit)
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU6050_PWR_MGMT_1);
+  Wire.write(0x00);  // Clear sleep mode
+  Wire.endTransmission(true);
+  
+  // Configure accelerometer: +/- 2g (default)
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(0x1C);  // ACCEL_CONFIG register
+  Wire.write(0x00);  // +/- 2g
+  Wire.endTransmission(true);
+  
+  // Configure gyroscope: +/- 250 deg/s (default)
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(0x1B);  // GYRO_CONFIG register
+  Wire.write(0x00);  // +/- 250 deg/s
+  Wire.endTransmission(true);
+  
+  imuAvailable = true;
+  return true;
+}
+
+// Read IMU sensor data
+void readIMU() {
+  static unsigned long lastRead = 0;
+  if (millis() - lastRead < 50) return;  // 20Hz update rate
+  lastRead = millis();
+  
+  // Read 14 bytes starting from ACCEL_XOUT_H
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU6050_ACCEL_XOUT_H);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU6050_ADDR, 14, true);
+  
+  if (Wire.available() < 14) return;
+  
+  // Accelerometer (raw values, 16384 LSB/g at +/-2g)
+  int16_t rawAccelX = (Wire.read() << 8) | Wire.read();
+  int16_t rawAccelY = (Wire.read() << 8) | Wire.read();
+  int16_t rawAccelZ = (Wire.read() << 8) | Wire.read();
+  
+  // Temperature
+  int16_t rawTemp = (Wire.read() << 8) | Wire.read();
+  
+  // Gyroscope (raw values, 131 LSB/(deg/s) at +/-250deg/s)
+  int16_t rawGyroX = (Wire.read() << 8) | Wire.read();
+  int16_t rawGyroY = (Wire.read() << 8) | Wire.read();
+  int16_t rawGyroZ = (Wire.read() << 8) | Wire.read();
+  
+  // Convert to physical units
+  accelX = rawAccelX / 16384.0;
+  accelY = rawAccelY / 16384.0;
+  accelZ = rawAccelZ / 16384.0;
+  
+  gyroX = rawGyroX / 131.0;
+  gyroY = rawGyroY / 131.0;
+  gyroZ = rawGyroZ / 131.0;
+  
+  temperature = (rawTemp / 340.0) + 36.53;
+  
+  // Calculate pitch and roll from accelerometer
+  // (simple tilt sensing - works when relatively stationary)
+  // Negated for correct orientation with MPU-6050 mounted component-side up
+  pitch = -atan2(accelX, sqrt(accelY * accelY + accelZ * accelZ)) * 180.0 / PI;
+  roll = -atan2(accelY, sqrt(accelX * accelX + accelZ * accelZ)) * 180.0 / PI;
+}
+
+// Non-blocking IMU read for use during streaming
+void readIMUImmediate() {
+  Wire.beginTransmission(MPU6050_ADDR);
+  Wire.write(MPU6050_ACCEL_XOUT_H);
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU6050_ADDR, 14, true);
+  
+  if (Wire.available() < 14) return;
+  
+  int16_t rawAccelX = (Wire.read() << 8) | Wire.read();
+  int16_t rawAccelY = (Wire.read() << 8) | Wire.read();
+  int16_t rawAccelZ = (Wire.read() << 8) | Wire.read();
+  int16_t rawTemp = (Wire.read() << 8) | Wire.read();
+  int16_t rawGyroX = (Wire.read() << 8) | Wire.read();
+  int16_t rawGyroY = (Wire.read() << 8) | Wire.read();
+  int16_t rawGyroZ = (Wire.read() << 8) | Wire.read();
+  
+  accelX = rawAccelX / 16384.0;
+  accelY = rawAccelY / 16384.0;
+  accelZ = rawAccelZ / 16384.0;
+  gyroX = rawGyroX / 131.0;
+  gyroY = rawGyroY / 131.0;
+  gyroZ = rawGyroZ / 131.0;
+  temperature = (rawTemp / 340.0) + 36.53;
+  
+  pitch = -atan2(accelX, sqrt(accelY * accelY + accelZ * accelZ)) * 180.0 / PI;
+  roll = -atan2(accelY, sqrt(accelX * accelX + accelZ * accelZ)) * 180.0 / PI;
 }
 
 // Camera initialization
@@ -183,10 +331,23 @@ void handleApiStatus() {
 
 void handleApiTelemetry() {
   String json = "{";
-  json += "\"lat\":" + String(mockLat, 6) + ",";
-  json += "\"lon\":" + String(mockLon, 6) + ",";
-  json += "\"speedKph\":" + String((int)mockSpeed) + ",";
-  json += "\"headingDeg\":" + String((int)mockHeading);
+  json += "\"orientation\":{";
+  json += "\"available\":" + String(imuAvailable ? "true" : "false") + ",";
+  json += "\"pitch\":" + String(pitch, 2) + ",";
+  json += "\"roll\":" + String(roll, 2) + ",";
+  json += "\"accel\":{";
+  json += "\"x\":" + String(accelX, 3) + ",";
+  json += "\"y\":" + String(accelY, 3) + ",";
+  json += "\"z\":" + String(accelZ, 3);
+  json += "},";
+  json += "\"gyro\":{";
+  json += "\"x\":" + String(gyroX, 2) + ",";
+  json += "\"y\":" + String(gyroY, 2) + ",";
+  json += "\"z\":" + String(gyroZ, 2);
+  json += "},";
+  json += "\"temp\":" + String(temperature, 1);
+  json += "},";
+  json += "\"timestamp\":" + String(millis());
   json += "}";
   
   server.send(200, "application/json", json);
@@ -207,9 +368,13 @@ void handleCapture() {
 void handleStream() {
   WiFiClient client = server.client();
   
+  isRecording = true;
+  
   String response = "HTTP/1.1 200 OK\r\n";
   response += "Content-Type: multipart/x-mixed-replace; boundary=frame\r\n\r\n";
   client.print(response);
+  
+  unsigned long lastImuRead = 0;
   
   while (client.connected()) {
     camera_fb_t* fb = esp_camera_fb_get();
@@ -225,9 +390,17 @@ void handleStream() {
     
     esp_camera_fb_return(fb);
     
+    // Keep IMU data updated during streaming (every 50ms)
+    if (imuAvailable && (millis() - lastImuRead > 50)) {
+      readIMUImmediate();
+      lastImuRead = millis();
+    }
+    
     if (!client.connected()) break;
     delay(33); // ~30fps max
   }
+  
+  isRecording = false;
 }
 
 void handleRecordToggle() {
@@ -238,18 +411,5 @@ void handleRecordToggle() {
 
 void handleNotFound() {
   server.send(404, "text/plain", "Not Found");
-}
-
-// Mock telemetry - replace with real GPS/IMU reads
-void updateMockTelemetry() {
-  static unsigned long lastUpdate = 0;
-  if (millis() - lastUpdate < 100) return;
-  lastUpdate = millis();
-  
-  float t = millis() / 1000.0;
-  mockLat = 33.4484 + sin(t / 10.0) * 0.001;
-  mockLon = -112.0740 + cos(t / 10.0) * 0.001;
-  mockSpeed = abs(sin(t / 5.0) * 80) + 20;
-  mockHeading = fmod(t * 2, 360);
 }
 

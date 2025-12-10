@@ -1,6 +1,6 @@
 # Tactical Console
 
-A self-contained tactical monitoring console for ESP32-S3 CAM. The device serves a web UI directly from flash memory with live camera streaming - all running offline.
+A self-contained tactical monitoring console for ESP32-S3 CAM with IMU orientation sensing. The device serves a web UI directly from flash memory with live camera streaming and real-time orientation data - all running offline.
 
 ## Demo
 
@@ -13,12 +13,11 @@ _Demo video/GIF coming soon - shows ESP32-S3 hardware and live web interface_
 
 ## Features
 
-- **Live Camera Feed** - MJPEG streaming from OV2640/OV3660 camera (main feature)
+- **Live Camera Feed** - MJPEG streaming from OV2640/OV3660 camera
+- **IMU Orientation** - Real-time pitch/roll from MPU-6050 gyroscope/accelerometer
 - **Self-Hosted Web UI** - Served directly from ESP32 flash memory
 - **Offline Operation** - Creates its own WiFi network, no internet required
 - **REST API** - Status and telemetry endpoints
-
-> **Note:** Status and telemetry data are **mock/placeholder values**. The primary feature is the camera streaming. Replace mock data with real sensors.
 
 ---
 
@@ -53,20 +52,45 @@ ty/ {print $1; exit}') tactical_console/
 ### 3. Connect
 
 1. Join WiFi network: **TacticalConsole** (password: `tactical123`)
-2. Open browser: **http://192.168.4.1**
+2. Open browser: **http://tactical.local** (or `http://192.168.4.1`)
+
+---
+
+## Hardware
+
+### Required Components
+
+| Component | Description | Connection |
+|-----------|-------------|------------|
+| XIAO ESP32-S3 Sense | Main board with camera | - |
+| MPU-6050 | 6-axis gyroscope/accelerometer | I2C |
+
+### MPU-6050 Wiring
+
+| MPU-6050 Pin | ESP32-S3 Pin |
+|--------------|--------------|
+| VCC | 3V3 |
+| GND | GND |
+| SCL | D5 (GPIO6) |
+| SDA | D4 (GPIO5) |
+| ADO | GND (sets I2C address to 0x68) |
+| INT | Not connected |
+| XDA/XCL | Not connected |
 
 ---
 
 ## Architecture
 
 ```
-ESP32-S3 CAM
+ESP32-S3 CAM + MPU-6050
 ├── WebServer (port 80)
 │   ├── /              → Web UI (from flash)
-│   ├── /api/status    → Device status (mock)
-│   ├── /api/telemetry → GPS/heading (mock)
+│   ├── /api/status    → Device status
+│   ├── /api/telemetry → IMU orientation data
 │   ├── /api/capture   → JPEG snapshot
 │   └── /api/stream    → MJPEG live feed
+├── I2C Bus
+│   └── MPU-6050 → pitch, roll, accel, gyro
 └── WiFi AP → "TacticalConsole"
 ```
 
@@ -76,8 +100,8 @@ ESP32-S3 CAM
 
 ```
 tactical-console/
-├── esp32/                    # Arduino sketch
-│   ├── tactical_console.ino  # Main sketch
+├── tactical_console/         # Arduino sketch
+│   ├── tactical_console.ino  # Main sketch (camera + IMU)
 │   ├── camera_pins.h         # GPIO config
 │   └── web_assets.h          # Generated (bun run build:esp32)
 ├── src/
@@ -109,40 +133,29 @@ bun test
 
 ## Customization
 
-### Adding Real GPS
-
-Replace mock values in `tactical_console.ino`:
-
-```cpp
-#include <TinyGPS++.h>
-TinyGPSPlus gps;
-
-void updateTelemetry() {
-  while (GPS_Serial.available()) {
-    gps.encode(GPS_Serial.read());
-  }
-  if (gps.location.isValid()) {
-    mockLat = gps.location.lat();
-    mockLon = gps.location.lng();
-  }
-}
-```
-
 ### Different Camera Board
 
-Edit `esp32/camera_pins.h` with your board's GPIO mapping.
+Edit `tactical_console/camera_pins.h` with your board's GPIO mapping.
+
+### IMU Configuration
+
+The MPU-6050 is configured for:
+- Accelerometer: +/- 2g range
+- Gyroscope: +/- 250 deg/s range
+- Update rate: 20Hz
+
+Modify `initIMU()` and `readIMU()` in `tactical_console.ino` to adjust sensitivity or add filtering.
 
 ---
 
 ## Build Output
 
-| File                    | Size    |
-| ----------------------- | ------- |
-| Frontend (HTML+JS)      | ~21 KB  |
-| Arduino sketch + assets | ~1.2 MB |
+| Component | File | Size |
+|-----------|------|------|
+| Frontend | `dist/index.html` | 545 B |
+| Frontend | `dist/assets/main.js` | 30.174 KB |
+| **Frontend Total** | | **30.7 KB** |
+| Backend (dev server) | `build/index.js` | 2.1 KB |
+| ESP32 sketch + assets | `.bin` | ~1.2 MB |
 
 ---
-
-## License
-
-MIT
