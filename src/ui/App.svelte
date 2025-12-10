@@ -1,6 +1,7 @@
 <script lang="ts">
   import StatusPanel from "./components/StatusPanel.svelte";
   import TelemetryPanel from "./components/TelemetryPanel.svelte";
+  import CameraFeed from "./components/CameraFeed.svelte";
 </script>
 
 <div class="console">
@@ -18,6 +19,7 @@
   <main class="panels">
     <StatusPanel />
     <TelemetryPanel />
+    <CameraFeed />
   </main>
 
   <footer class="footer">

@@ -79,6 +79,18 @@ describe("ESP32 Arduino Sketch", () => {
     expect(content).toContain("softAP");
   });
 
+  test("sketch has camera init function", async () => {
+    const content = await Bun.file("esp32/tactical_console.ino").text();
+    expect(content).toContain("initCamera");
+    expect(content).toContain("esp_camera_init");
+  });
+
+  test("sketch has MJPEG streaming handler", async () => {
+    const content = await Bun.file("esp32/tactical_console.ino").text();
+    expect(content).toContain("handleStream");
+    expect(content).toContain("multipart/x-mixed-replace");
+  });
+
   test("camera_pins.h defines XIAO ESP32S3 pins", async () => {
     const content = await Bun.file("esp32/camera_pins.h").text();
     expect(content).toContain("CAMERA_MODEL_XIAO_ESP32S3");
