@@ -2,12 +2,20 @@
 
 A self-contained tactical monitoring console for ESP32-S3 CAM with IMU orientation sensing. The device serves a web UI directly from flash memory with live camera streaming and real-time orientation data - all running offline.
 
-## Demo
+## Gallery
 
-<!-- Add GIF or video of the hardware device and web UI here -->
-<!-- ![Tactical Console Demo](./assets/demo.gif) -->
-
-_Demo video/GIF coming soon - shows ESP32-S3 hardware and live web interface_
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <strong>Camera Feed</strong><br>
+      <img src="./image/camera.PNG" width="100%">
+    </td>
+    <td width="50%" align="center">
+      <strong>IMU Orientation</strong><br>
+      <img src="./image/gyro.PNG" width="100%">
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -24,6 +32,7 @@ _Demo video/GIF coming soon - shows ESP32-S3 hardware and live web interface_
 ## Quick Start
 
 ### Dependencies
+
 1. bun
 2. arduino-cli
 
@@ -41,13 +50,13 @@ bun run build:esp32
 ```bash
 arduino-cli compile --fqbn esp32:esp32:<your esp32 model> tactical_console/
 ```
+
 2. Upload
 
 ```bash
 arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32S3 -p (arduino-cli board list | awk '/t
 ty/ {print $1; exit}') tactical_console/
 ```
-
 
 ### 3. Connect
 
@@ -60,22 +69,22 @@ ty/ {print $1; exit}') tactical_console/
 
 ### Required Components
 
-| Component | Description | Connection |
-|-----------|-------------|------------|
-| XIAO ESP32-S3 Sense | Main board with camera | - |
-| MPU-6050 | 6-axis gyroscope/accelerometer | I2C |
+| Component           | Description                    | Connection |
+| ------------------- | ------------------------------ | ---------- |
+| XIAO ESP32-S3 Sense | Main board with camera         | -          |
+| MPU-6050            | 6-axis gyroscope/accelerometer | I2C        |
 
 ### MPU-6050 Wiring
 
-| MPU-6050 Pin | ESP32-S3 Pin |
-|--------------|--------------|
-| VCC | 3V3 |
-| GND | GND |
-| SCL | D5 (GPIO6) |
-| SDA | D4 (GPIO5) |
-| ADO | GND (sets I2C address to 0x68) |
-| INT | Not connected |
-| XDA/XCL | Not connected |
+| MPU-6050 Pin | ESP32-S3 Pin                   |
+| ------------ | ------------------------------ |
+| VCC          | 3V3                            |
+| GND          | GND                            |
+| SCL          | D5 (GPIO6)                     |
+| SDA          | D4 (GPIO5)                     |
+| ADO          | GND (sets I2C address to 0x68) |
+| INT          | Not connected                  |
+| XDA/XCL      | Not connected                  |
 
 ---
 
@@ -140,6 +149,7 @@ Edit `tactical_console/camera_pins.h` with your board's GPIO mapping.
 ### IMU Configuration
 
 The MPU-6050 is configured for:
+
 - Accelerometer: +/- 2g range
 - Gyroscope: +/- 250 deg/s range
 - Update rate: 20Hz
@@ -150,12 +160,16 @@ Modify `initIMU()` and `readIMU()` in `tactical_console.ino` to adjust sensitivi
 
 ## Build Output
 
-| Component | File | Size |
-|-----------|------|------|
-| Frontend | `dist/index.html` | 545 B |
-| Frontend | `dist/assets/main.js` | 30.174 KB |
-| **Frontend Total** | | **30.7 KB** |
-| Backend (dev server) | `build/index.js` | 2.1 KB |
-| ESP32 sketch + assets | `.bin` | ~1.2 MB |
+| Component             | File                  | Size        |
+| --------------------- | --------------------- | ----------- |
+| Frontend              | `dist/index.html`     | 545 B       |
+| Frontend              | `dist/assets/main.js` | 30.174 KB   |
+| **Frontend Total**    |                       | **30.7 KB** |
+| Backend (dev server)  | `build/index.js`      | 2.1 KB      |
+| ESP32 sketch + assets | `.bin`                | ~1.2 MB     |
 
 ---
+
+## Disclaimer
+
+Portions of this codebase were generated with assistance from a private LLM hosted and operated locally (qwen 3 coder 30b model on LM Studio). All generated code has been reviewed, tested, and modified as needed to ensure correctness and fitness for purpose.
