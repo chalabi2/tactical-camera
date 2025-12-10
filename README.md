@@ -162,6 +162,10 @@ Bun doesn't natively compile `.svelte` files. The custom plugin in `build.ts`:
 
 ---
 
+## Problems
+
+The main thread is blocked by the camera when streaming is enabled. This is a problem because the main thread is also used to serve the web server and handle the HTTP requests. This means that the web server will not be able to serve the requests while the camera is streaming so gyroscope data will not be updated and camera recording status remains on unless the webpage is refreshed.
+
 ## Disclaimer
 
 Portions of this codebase were generated with assistance from a private LLM hosted and operated locally. All generated code has been reviewed, tested, and modified as needed.
