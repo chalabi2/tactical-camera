@@ -164,7 +164,11 @@ Bun doesn't natively compile `.svelte` files. The custom plugin in `build.ts`:
 
 ## Problems
 
+### Main Thread Blocking
 The main thread is blocked by the camera when streaming is enabled. This is a problem because the main thread is also used to serve the web server and handle the HTTP requests. This means that the web server will not be able to serve the requests while the camera is streaming so gyroscope data will not be updated and camera recording status remains on unless the webpage is refreshed.
+
+### ESP Rest Server
+Currently the esp exposes a rest api for the frontend to make requests to. Then the frontend uses setInterval to refetch telemetry data every 100 ms. This is expensive and does not lend itself to real time multi client usage. A better alternative would be to write an adapter in the bun server that reads the sensor and camera data throigh Unix sockets then expose a websocket server that the clients can subscribe to.
 
 ## Disclaimer
 
