@@ -1,0 +1,12 @@
+# Bun configuration for tactical-console
+# Optimized for embedded/edge deployment
+
+[install]
+# Use exact versions to ensure reproducible builds on target hardware
+exact = true
+
+[bundle]
+# Target Bun runtime for backend builds
+# This produces smaller bundles than node target
+target = "bun"
+
