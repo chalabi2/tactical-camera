@@ -140,6 +140,25 @@ bun test
 
 ---
 
+## Custom Svelte Bundler
+
+Bun doesn't natively compile `.svelte` files, and the standard `esbuild-svelte` plugin uses callbacks Bun doesn't support. The custom plugin in `build.ts` handles this:
+
+1. **Intercepts** `.svelte` file imports during bundling
+2. **Preprocesses** TypeScript in `<script lang="ts">` tags using Bun's transpiler
+3. **Compiles** Svelte components to vanilla JavaScript
+4. **Returns** bundleable JS code
+
+| Compiler Option | Value        | Purpose                              |
+| --------------- | ------------ | ------------------------------------ |
+| `generate`      | `"dom"`      | Creates DOM manipulation code        |
+| `css`           | `"injected"` | Embeds component styles in JS bundle |
+| `dev`           | `false`      | Production mode, smaller output      |
+
+This keeps the entire build in Bun's ecosystem without Vite, Rollup, or Webpack.
+
+---
+
 ## Customization
 
 ### Different Camera Board
