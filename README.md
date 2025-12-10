@@ -1,6 +1,6 @@
 # Tactical Console
 
-A self-contained tactical monitoring console for ESP32-S3 CAM with IMU orientation sensing. The device serves a web UI directly from flash memory with live camera streaming and real-time orientation data - all running offline.
+An example of using **Svelte** and **Bun** to build an offline-first web UI that runs on embedded systems. The frontend is compiled and bundled into C++ header files, then flashed directly onto an ESP32-S3 where it's served from the device's own web server - no cloud, no internet, no external dependencies.
 
 ## Gallery
 
@@ -24,8 +24,37 @@ A self-contained tactical monitoring console for ESP32-S3 CAM with IMU orientati
 - **Live Camera Feed** - MJPEG streaming from OV2640/OV3660 camera
 - **IMU Orientation** - Real-time pitch/roll from MPU-6050 gyroscope/accelerometer
 - **Self-Hosted Web UI** - Served directly from ESP32 flash memory
-- **Offline Operation** - Creates its own WiFi network, no internet required
-- **REST API** - Status and telemetry endpoints
+- **Offline Operation** - Device creates its own WiFi network, no internet required
+- **Bun as Build Tool** - Compiles Svelte to embedded-ready assets
+
+---
+
+## How It Works
+
+```
+BUILD TIME (on your computer)
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│  Svelte Components ──► Bun Build ──► main.js ──► web_assets.h      │
+│  (src/ui/*.svelte)      (compile,     (bundled    (C++ PROGMEM     │
+│                          minify)       JS+CSS)     string)          │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ Flash via Arduino
+┌─────────────────────────────────────────────────────────────────────┐
+│                        RUNTIME (on ESP32)                           │
+│                                                                     │
+│  Browser ◄──── WiFi ────► ESP32 WebServer (C++)                    │
+│     │                          │                                    │
+│     │  GET /                   └──► Serve index.html from flash    │
+│     │  GET /api/telemetry      └──► Read MPU-6050 via I2C          │
+│     │  GET /api/stream         └──► Stream camera frames           │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Bun is only used at build time** to compile Svelte and generate assets. The ESP32 runs pure C++ (Arduino) - no JavaScript runtime on the device.
 
 ---
 
@@ -33,8 +62,8 @@ A self-contained tactical monitoring console for ESP32-S3 CAM with IMU orientati
 
 ### Dependencies
 
-1. bun
-2. arduino-cli
+- [Bun](https://bun.sh) - for building the frontend
+- [arduino-cli](https://arduino.github.io/arduino-cli/) - for compiling and uploading
 
 ### 1. Build the Frontend
 
@@ -45,29 +74,19 @@ bun run build:esp32
 
 ### 2. Upload to ESP32
 
-1. Compile
-
 ```bash
-arduino-cli compile --fqbn esp32:esp32:<your esp32 model> tactical_console/
-```
-
-2. Upload
-
-```bash
-arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32S3 -p (arduino-cli board list | awk '/t
-ty/ {print $1; exit}') tactical_console/
+arduino-cli compile --fqbn esp32:esp32:XIAO_ESP32S3 tactical_console/
+arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32S3 -p /dev/cu.usbmodem* tactical_console/
 ```
 
 ### 3. Connect
 
 1. Join WiFi network: **TacticalConsole** (password: `tactical123`)
-2. Open browser: **http://tactical.local** (or `http://192.168.4.1`)
+2. Open browser: **http://192.168.4.1**
 
 ---
 
 ## Hardware
-
-### Required Components
 
 | Component           | Description                    | Connection |
 | ------------------- | ------------------------------ | ---------- |
@@ -76,32 +95,13 @@ ty/ {print $1; exit}') tactical_console/
 
 ### MPU-6050 Wiring
 
-| MPU-6050 Pin | ESP32-S3 Pin                   |
-| ------------ | ------------------------------ |
-| VCC          | 3V3                            |
-| GND          | GND                            |
-| SCL          | D5 (GPIO6)                     |
-| SDA          | D4 (GPIO5)                     |
-| ADO          | GND (sets I2C address to 0x68) |
-| INT          | Not connected                  |
-| XDA/XCL      | Not connected                  |
-
----
-
-## Architecture
-
-```
-ESP32-S3 CAM + MPU-6050
-├── WebServer (port 80)
-│   ├── /              → Web UI (from flash)
-│   ├── /api/status    → Device status
-│   ├── /api/telemetry → IMU orientation data
-│   ├── /api/capture   → JPEG snapshot
-│   └── /api/stream    → MJPEG live feed
-├── I2C Bus
-│   └── MPU-6050 → pitch, roll, accel, gyro
-└── WiFi AP → "TacticalConsole"
-```
+| MPU-6050 Pin | ESP32-S3 Pin |
+| ------------ | ------------ |
+| VCC          | 3V3          |
+| GND          | GND          |
+| SCL          | D5 (GPIO6)   |
+| SDA          | D4 (GPIO5)   |
+| ADO          | GND          |
 
 ---
 
@@ -109,14 +109,14 @@ ESP32-S3 CAM + MPU-6050
 
 ```
 tactical-console/
-├── tactical_console/         # Arduino sketch
-│   ├── tactical_console.ino  # Main sketch (camera + IMU)
+├── tactical_console/         # Arduino sketch (runs on ESP32)
+│   ├── tactical_console.ino  # WebServer + camera + IMU
 │   ├── camera_pins.h         # GPIO config
-│   └── web_assets.h          # Generated (bun run build:esp32)
+│   └── web_assets.h          # Generated frontend (PROGMEM)
 ├── src/
-│   ├── server/               # Bun dev server
+│   ├── server/               # Dev server (mock data for testing UI)
 │   └── ui/                   # Svelte frontend
-├── build.ts                  # Custom Svelte bundler
+├── build.ts                  # Custom Svelte bundler for Bun
 └── package.json
 ```
 
@@ -124,71 +124,44 @@ tactical-console/
 
 ## Development
 
+The dev server provides mock sensor data so you can work on the UI without hardware:
+
 ```bash
-# Dev server (mirrors ESP32 API)
-bun run dev
-
-# Build frontend only
-bun run build
-
-# Build + generate ESP32 assets
-bun run build:esp32
-
-# Run tests
-bun test
+bun run dev        # Start dev server at localhost:3000
+bun run build      # Build frontend only
+bun run build:esp32 # Build + generate ESP32 assets
+bun test           # Run tests
 ```
 
 ---
 
 ## Custom Svelte Bundler
 
-Bun doesn't natively compile `.svelte` files, and the standard `esbuild-svelte` plugin uses callbacks Bun doesn't support. The custom plugin in `build.ts` handles this:
+Bun doesn't natively compile `.svelte` files. The custom plugin in `build.ts`:
 
-1. **Intercepts** `.svelte` file imports during bundling
-2. **Preprocesses** TypeScript in `<script lang="ts">` tags using Bun's transpiler
-3. **Compiles** Svelte components to vanilla JavaScript
-4. **Returns** bundleable JS code
+1. **Intercepts** `.svelte` imports during bundling
+2. **Preprocesses** TypeScript using Bun's transpiler
+3. **Compiles** Svelte to vanilla JavaScript
+4. **Injects** CSS into the JS bundle
 
-| Compiler Option | Value        | Purpose                              |
-| --------------- | ------------ | ------------------------------------ |
-| `generate`      | `"dom"`      | Creates DOM manipulation code        |
-| `css`           | `"injected"` | Embeds component styles in JS bundle |
-| `dev`           | `false`      | Production mode, smaller output      |
-
-This keeps the entire build in Bun's ecosystem without Vite, Rollup, or Webpack.
-
----
-
-## Customization
-
-### Different Camera Board
-
-Edit `tactical_console/camera_pins.h` with your board's GPIO mapping.
-
-### IMU Configuration
-
-The MPU-6050 is configured for:
-
-- Accelerometer: +/- 2g range
-- Gyroscope: +/- 250 deg/s range
-- Update rate: 20Hz
-
-Modify `initIMU()` and `readIMU()` in `tactical_console.ino` to adjust sensitivity or add filtering.
+| Option     | Value        | Purpose                       |
+| ---------- | ------------ | ----------------------------- |
+| `generate` | `"dom"`      | DOM manipulation code         |
+| `css`      | `"injected"` | Embed styles in JS bundle     |
+| `dev`      | `false`      | Production mode, smaller size |
 
 ---
 
 ## Build Output
 
-| Component             | File                  | Size        |
-| --------------------- | --------------------- | ----------- |
-| Frontend              | `dist/index.html`     | 545 B       |
-| Frontend              | `dist/assets/main.js` | 30.174 KB   |
-| **Frontend Total**    |                       | **30.7 KB** |
-| Backend (dev server)  | `build/index.js`      | 2.1 KB      |
-| ESP32 sketch + assets | `.bin`                | ~1.2 MB     |
+| Component      | File                  | Size    |
+| -------------- | --------------------- | ------- |
+| Frontend HTML  | `dist/index.html`     | 545 B   |
+| Frontend JS    | `dist/assets/main.js` | ~30 KB  |
+| ESP32 firmware | `.bin`                | ~1.2 MB |
 
 ---
 
 ## Disclaimer
 
-Portions of this codebase were generated with assistance from a private LLM hosted and operated locally (qwen 3 coder 30b model on LM Studio). All generated code has been reviewed, tested, and modified as needed to ensure correctness and fitness for purpose.
+Portions of this codebase were generated with assistance from a private LLM hosted and operated locally. All generated code has been reviewed, tested, and modified as needed.
