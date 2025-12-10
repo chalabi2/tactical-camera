@@ -18,11 +18,15 @@ _Demo video/GIF coming soon - shows ESP32-S3 hardware and live web interface_
 - **Offline Operation** - Creates its own WiFi network, no internet required
 - **REST API** - Status and telemetry endpoints
 
-> **Note:** Status and telemetry data are **mock/placeholder values**. The primary feature is the camera streaming. Replace mock data with real sensors (GPS, IMU) as needed.
+> **Note:** Status and telemetry data are **mock/placeholder values**. The primary feature is the camera streaming. Replace mock data with real sensors.
 
 ---
 
 ## Quick Start
+
+### Dependencies
+1. bun
+2. arduino-cli
 
 ### 1. Build the Frontend
 
@@ -33,16 +37,18 @@ bun run build:esp32
 
 ### 2. Upload to ESP32
 
-1. Open `esp32/tactical_console.ino` in Arduino IDE
-2. Configure board settings:
+1. Compile
 
-| Setting          | Value                                |
-| ---------------- | ------------------------------------ |
-| Board            | XIAO_ESP32S3                         |
-| Partition Scheme | **Huge APP (3MB No OTA/1MB SPIFFS)** |
-| PSRAM            | **OPI PSRAM**                        |
+```bash
+arduino-cli compile --fqbn esp32:esp32:<your esp32 model> tactical_console/
+```
+2. Upload
 
-3. Click **Upload**
+```bash
+arduino-cli upload --fqbn esp32:esp32:XIAO_ESP32S3 -p (arduino-cli board list | awk '/t
+ty/ {print $1; exit}') tactical_console/
+```
+
 
 ### 3. Connect
 
